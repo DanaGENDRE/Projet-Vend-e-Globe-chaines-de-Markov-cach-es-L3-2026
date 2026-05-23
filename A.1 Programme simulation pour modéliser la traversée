@@ -1,4 +1,3 @@
-\begin{minted}{python}
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -63,4 +62,3 @@ plt.ylabel("Ordonnée (Dérive latérale)")
 plt.legend()
 plt.grid(True)
 plt.show()
-\end{minted}
