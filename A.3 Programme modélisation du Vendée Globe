@@ -1,0 +1,110 @@
+\begin{minted}{python}
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Polygon
+
+# Définition des zones avec leurs coordonnées (i,j)
+zones = {
+    1: {"name": "Départ", "coords": [(0, 0)]},
+    2: {"name": "Atlantique Nord", "coords": [(1, 1), (2, 1), (3, 0)]},
+    3: {"name": "Pot au Noir", "coords": [(4, 1), (4, 0), (4, -1)]},
+    4: {"name": "Atlantique Sud", "coords": [(5, 0), (6, -1), (7, 0)]},
+    5: {"name": "Cap de Bonne-Espérance", "coords": [(8, 0)]},
+    6: {"name": "Océan Indien", "coords": [(9, -1), (10, 0)]},
+    7: {"name": "Cap Leeuwin", "coords": [(11, -1)]},
+    8: {"name": "Pacifique Sud", "coords": [(12, -2), (13, -1)]},
+    9: {"name": "Cap Horn", "coords": [(14, -1)]},
+    10: {"name": "Retour Atlantique Sud", "coords": [(15, 0), (16, -1)]},
+    11: {"name": "Retour Atlantique Nord", "coords": [(17, 1), (18, 0)]},
+    12: {"name": "Arrivée", "coords": [(19, 0)]}
+}
+
+# Matrice de transition corrigée (chaque ligne somme à 1)
+transition_matrix = np.array([
+    [0, 0.9, 0.1, 0, 0, 0, 0, 0, 0, 0, 0, 0],   # Zone 1
+    [0, 0, 0.85, 0.15, 0, 0, 0, 0, 0, 0, 0, 0],  # Zone 2
+    [0, 0, 0, 0.9, 0.1, 0, 0, 0, 0, 0, 0, 0],   # Zone 3
+    [0, 0, 0, 0, 0.8, 0.2, 0, 0, 0, 0, 0, 0],   # Zone 4
+    [0, 0, 0, 0, 0, 0.9, 0.1, 0, 0, 0, 0, 0],   # Zone 5
+    [0, 0, 0, 0, 0, 0, 0.85, 0.15, 0, 0, 0, 0], # Zone 6
+    [0, 0, 0, 0, 0, 0, 0, 0.8, 0.2, 0, 0, 0],   # Zone 7
+    [0, 0, 0, 0, 0, 0, 0, 0, 0.9, 0.1, 0, 0],   # Zone 8
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0.85, 0.15, 0], # Zone 9
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.8, 0.2],   # Zone 10
+    [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0.05, 0.95], # Zone 11 (corrigée)
+    [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]        # Zone 12
+])
+
+# Fonction pour simuler une trajectoire
+def simuler_trajectoire(matrix, start_zone=1, max_steps=100):
+    current_zone = start_zone
+    trajectory = [current_zone]
+    days_in_zone = {zone: 0 for zone in range(1, 13)}
+    days_in_zone[current_zone] += 1
+
+    for _ in range(max_steps):
+        if current_zone == 12:  # Arrivée
+            break
+        # Choix de la prochaine zone selon les probabilités de transition
+        next_zone = np.random.choice(
+            range(1, 13),
+            p=matrix[current_zone - 1]
+        )
+        trajectory.append(next_zone)
+        days_in_zone[next_zone] += 1
+        current_zone = next_zone
+
+    return trajectory, days_in_zone
+
+# Simulation d'une trajectoire
+np.random.seed(42)  # Pour la reproductibilité
+trajectory, days_in_zone = simuler_trajectoire(transition_matrix)
+
+# Préparation des données pour l'affichage
+def get_zone_center(zone_num):
+    coords = zones[zone_num]["coords"]
+    x = np.mean([c[0] for c in coords])
+    y = np.mean([c[1] for c in coords])
+    return (x, y)
+
+# Coordonnées des centres de chaque zone
+zone_centers = {zone: get_zone_center(zone) for zone in zones}
+
+# Coordonnées de la trajectoire
+trajectory_coords = [zone_centers[zone] for zone in trajectory]
+
+# Affichage des zones
+plt.figure(figsize=(12, 8))
+
+# Dessiner les zones (polygones)
+colors = plt.cm.tab20(np.linspace(0, 1, 12))
+for idx, (zone_num, zone_info) in enumerate(zones.items()):
+    coords = zone_info["coords"]
+    x = [c[0] for c in coords]
+    y = [c[1] for c in coords]
+    poly = Polygon(np.array([x, y]).T, closed=True, alpha=0.3, color=colors[idx], label=zone_info["name"])
+    plt.gca().add_patch(poly)
+
+# Afficher la trajectoire
+x_traj = [coord[0] for coord in trajectory_coords]
+y_traj = [coord[1] for coord in trajectory_coords]
+plt.plot(x_traj, y_traj, 'r-', linewidth=2, marker='o', markersize=6, label="Trajectoire simulée")
+
+# Annoter les zones
+for zone_num, (x, y) in zone_centers.items():
+    plt.text(x, y, str(zone_num), fontsize=10, ha='center', va='center', color='black')
+
+plt.title("Simulation d'une trajectoire du Vendée Globe\n(Chaîne de Markov à 12 zones)")
+plt.xlabel("Coordonnée i (Est-Ouest)")
+plt.ylabel("Coordonnée j (Nord-Sud)")
+plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+plt.grid(True)
+plt.tight_layout()
+plt.savefig('trajectoire_vendee_globe.pdf')  # Sauvegarde la figure en PDF
+plt.show()
+
+# Afficher le nombre de jours passés dans chaque zone
+print("Nombre de jours passés dans chaque zone :")
+for zone_num in range(1, 13):
+    print(f"{zones[zone_num]['name']}: {days_in_zone[zone_num]} jours")
+\end{minted}
