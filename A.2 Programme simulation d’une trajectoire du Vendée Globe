@@ -1,0 +1,182 @@
+\begin{minted}{python}
+import random
+import matplotlib.pyplot as plt
+import numpy as np
+
+
+########### 1 - Initialisation des paramètres #############
+
+"initialisation des variables de la position du départ de la course sur le plan 2d et de l'arrivée"
+DEPART=(0,0)
+ARRIVEE=(15,15)
+
+"vecteur des états de base de la chaîne cachée. 0 signifie calme, 1 signifie tempête"
+POSITION_INITIALE=np.array([0.75, 0.25]) # 75% de chances d'etre calme, 25% de chances d'avoir une tempete
+
+"matrice d’émission (ce que le capteur lit), les lignes correspondent à l'état reel,et les colonnes au capteur"
+# Ligne 0 (Calme): 80% normal, 20% alerte
+# Ligne 1 (Tempete): 15% normal, 85% alerte
+MATRICE_EMISSION=np.array([[0.80, 0.20],[0.15, 0.85]])
+
+
+########## 2 - Ce qu'on observe #####################
+
+def proba_tempete(observation):
+    "fonction qui calcule la vraie proba de tempete grace aux matrices"
+    p_obs_sachant_etat=MATRICE_EMISSION[:, observation] # on recupère toute la colonne de la matrice qui correspond a notre observation (0 ou 1)
+    p_obs_totale=np.sum(p_obs_sachant_etat*POSITION_INITIALE) # loi des probabilités totales, on multiplie la colonne par notre vecteur de base POSITION_INITIALE
+    return (p_obs_sachant_etat[1]*POSITION_INITIALE[1])/p_obs_totale  # Théorème de Bayes, proba sachant tempête divisé par proba totale
+
+######## 3 - Grille ############# 
+
+def generer_case_adjacente():
+    "on choisit au hasard si il y a une tempête et on voit ce que dit le capteur en lisant les matrices"
+    
+    etat_reel=np.random.choice([0, 1], p=POSITION_INITIALE) # l’état réel (0 ou 1) en respectant les probas du vecteur POSITION_INITIALE
+    observation=np.random.choice([0, 1], p=MATRICE_EMISSION[etat_reel]) # ce que dit le capteur en regardant la bonne ligne de la matrice d'émission
+    est_tempete=(etat_reel == 1) # transforme le 1 en True pour la suite du code
+    return est_tempete, observation
+
+############# 4 - Les bateaux et leurs profils #########
+
+class Bateau:
+    def __init__(self, nom, profil, couleur):
+        self.nom=nom
+        self.profil=profil 
+        self.couleur=couleur
+        self.x=DEPART[0]
+        self.y=DEPART[1]
+        self.jours_penalite=0 
+        self.fini=False
+        
+        "on crée un historique pour tracer le graphique a la fin"
+        self.historique_x=[self.x]
+        self.historique_y=[self.y]
+
+    def avancer(self):
+        "on appelle la fonction tous les jours pour faire bouger le bateau"
+        if self.fini:
+            return "Arrivé à destination."
+
+        if self.jours_penalite >0:
+            self.jours_penalite -=1
+            self.historique_x.append(self.x)
+            self.historique_y.append(self.y)
+            return f"Repare les avaries (Encore {self.jours_penalite}j d'arret)." # une avarie c'est le terme technique pour un dégât matériel ou une panne sur le bateau
+
+        tempete_nord, obs_nord=generer_case_adjacente()
+        tempete_est, obs_est=generer_case_adjacente()
+
+        "le skipper utilise le théorème de bayes pour évaluer le danger"
+        danger_nord=proba_tempete(obs_nord)
+        danger_est=proba_tempete(obs_est)
+        direction=None
+        action_log=""
+        
+        # "le profil du skipper définit sa décision"
+        if self.profil=="Agressif":
+            direction="Nord" if self.x > self.y else "Est"
+            action_log=f"Avance vers {direction}, capteur ignoré."
+            
+        elif self.profil=="Prudent":
+            if danger_nord >0.4 and danger_est >0.4:
+                direction="SurPlace"
+                action_log="S’arrête et jette l'ancre, trop de danger."
+            else:
+                direction="Nord" if danger_nord < danger_est else "Est"
+                action_log=f"Avance vers {direction} prudemment."
+                
+        elif self.profil=="Opportuniste":
+            direction="Nord" if danger_nord <= danger_est else "Est"
+            action_log=f"Avance vers {direction} selon le calcul."
+            
+        elif self.profil=="Expert":
+            direction_ideale = "Nord" if self.x > self.y else "Est"
+            danger_sur_route = danger_nord if direction_ideale == "Nord" else danger_est
+            if danger_sur_route > 0.4:
+                direction = "SurPlace"
+                action_log = f"Jette l'ancre ! Tempête probable sur la route {direction_ideale}."
+            else:
+                direction = direction_ideale
+                action_log = f"Fonce vers {direction_ideale}, voie sécurisée."
+                
+        # "le bateau bouge en vrai et découvre la case cachée"
+        if direction=="Nord":
+            self.y +=1
+            if tempete_nord: 
+                self.jours_penalite +=5
+                action_log += " - Tempête ! Bateau cassé (+5j)."
+                
+        elif direction=="Est":
+            self.x +=1
+            if tempete_est: 
+                self.jours_penalite +=5
+                action_log += " - Tempête ! Bateau cassé (+5j)."
+                
+        self.historique_x.append(self.x)
+        self.historique_y.append(self.y)
+            
+        if self.x >= ARRIVEE[0] and self.y >= ARRIVEE[1]:
+            self.fini=True
+            action_log += " - Ligne d'arrivée est franchie !"
+            
+        return action_log
+      
+
+########## 5 - Simulation de la course ###############
+
+"Génération des noms Équipe 1 à Équipe 30 on prend donc pour notre simulation 30 participants"
+noms_equipes=[f"Équipe {i}" for i in range(1, 31)]
+profils_possibles=["Agressif", "Prudent", "Opportuniste", "Expert"]
+
+"Génération de la flotte avec profil et couleur aléatoires"
+flotte=[]
+for nom in noms_equipes:
+    profil_aleatoire=random.choice(profils_possibles)
+    couleur_aleatoire=f"#{random.randint(0, 0xFFFFFF):06x}"
+    flotte.append(Bateau(nom, profil_aleatoire, couleur_aleatoire))
+
+jour=0
+classement=[]
+
+print("Départ de la course de la Vendée Globe")
+
+while len(classement)<len(flotte):
+    jour +=1
+    print(f"=== JOUR {jour} ===")
+    
+    for bateau in flotte:
+        if not bateau.fini:
+            rapport_action=bateau.avancer()
+            print(f"[{bateau.nom.ljust(9)}] | Position: ({bateau.x:2}, {bateau.y:2}) | {rapport_action}")
+            if bateau.fini:
+                classement.append((bateau.nom, bateau.profil, jour))
+    print("") 
+
+#### 6 - Affichage résultats ############
+print("=========================================")
+print(f"La course est totalement finie, la dernière équipe est arrivée en {jour} jours")
+print("=========================================")
+print("Classement final :")
+for position, (nom, profil, temps) in enumerate(classement, 1):
+    print(f"  {position}. {nom} ({profil}) - est arrivée en {temps} jours")
+
+
+############ 7 - Graphiques des trajectoires ###############
+plt.figure(figsize=(10, 10))
+for bateau in flotte:
+    "on decale un peu les points sur le dessin pour voir si des bateaux se superposent"
+    x_decale=[x+random.uniform(-0.3, 0.3) for x in bateau.historique_x]
+    y_decale=[y+random.uniform(-0.3, 0.3) for y in bateau.historique_y]
+    plt.plot(x_decale, y_decale, marker='o', markersize=3, linestyle='-', color=bateau.couleur, alpha=0.6)
+plt.scatter(DEPART[0], DEPART[1], color='black', s=100, zorder=5, label="Depart")
+plt.scatter(ARRIVEE[0], ARRIVEE[1], color='black', s=150, marker='*', zorder=5, label="Arrivee")
+plt.title("Trajectoires des 30 bateaux", fontsize=14, fontweight='bold')
+plt.xlabel("Déplacement vers l'Est", fontsize=12)
+plt.ylabel("Déplacement vers le Nord", fontsize=12)
+plt.grid(True, linestyle='--', alpha=0.5)
+plt.xlim(-1, ARRIVEE[0]+2)
+plt.ylim(-1, ARRIVEE[1]+2)
+
+plt.show()
+\end{minted}
