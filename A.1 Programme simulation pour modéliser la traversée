@@ -1,0 +1,66 @@
+\begin{minted}{python}
+import numpy as np
+import matplotlib.pyplot as plt
+
+def simulation(T_max_dist, n_etape_limite=10000):
+    # 1. Définition du graphe et des vitesses
+    # Voisins pour chaque état (1 à 5)
+    adj = {
+        1: [2, 3],
+        2: [1, 3, 4],
+        3: [1, 2, 5],
+        4: [2, 5],
+        5: [4, 3]
+    }
+    
+    # Vitesses V(Xn) = (vx, vy)
+    vitesse = {
+        1: np.array([1, 0]),
+        2: np.array([2, 2]),
+        3: np.array([2, -2]),
+        4: np.array([-2, 1]),
+        5: np.array([-2, -1])
+    }
+
+    # 2. Initialisation
+    x_curr = 1 # État initial de la météo
+    y_pos = np.array([0.0, 0.0]) # Position (0,0)
+    
+    history_y = [y_pos.copy()]
+    history_z = [y_pos.copy()] # Position observée (bruité)
+    
+    n = 0
+    while y_pos[0] < T_max_dist and n < n_etape_limite:
+        # Évolution de la météo (Marche uniforme)
+        voisins = adj[x_curr]
+        x_curr = np.random.choice(voisins)
+        
+        # Déplacement réel
+        y_pos += vitesse[x_curr]
+        history_y.append(y_pos.copy())
+        
+        # Observation bruitée (Question 6 : variance = Xn)
+        sigma = np.sqrt(x_curr)
+        bruit = np.random.normal(0, sigma, size=2)
+        history_z.append(y_pos + bruit)
+        
+        n += 1
+        
+    return np.array(history_y), np.array(history_z), n
+
+# 3. Simulation et Visualisation
+T_valeurs = [1000, 1000, 1000]
+plt.figure(figsize=(12, 8))
+
+for T in T_valeurs:
+    traj_real, traj_obs, time = simulation(T)
+    plt.plot(traj_real[:, 0], traj_real[:, 1], label=f'T={T} (Temps={time}, Théorie={2*T})')
+
+plt.axvline(x=0, color='black', linestyle='--')
+plt.title("Trajectoires du bateau jusqu'à la côte (x = T)")
+plt.xlabel("Abscisse (Distance vers la côte)")
+plt.ylabel("Ordonnée (Dérive latérale)")
+plt.legend()
+plt.grid(True)
+plt.show()
+\end{minted}
