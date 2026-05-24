@@ -16,25 +16,29 @@ POSITION_INITIALE=np.array([0.75, 0.25]) # 75% de chances d'etre calme, 25% de c
 # Ligne 0 (Calme): 80% normal, 20% alerte
 # Ligne 1 (Tempete): 15% normal, 85% alerte
 MATRICE_EMISSION=np.array([[0.80, 0.20],[0.15, 0.85]])
+"matrice de transition (la probabilité que la météo change par rapport à la case précédente)"
+# Ligne 0 (Venant d'une zone calme): 85% de rester calme, 15% de tomber sur une tempête
+# Ligne 1 (Venant d'une zone tempête): 40% de repasser au calme, 60% de rester dans la tempête
+MATRICE_TRANSITION=np.array([[0.85, 0.15],[0.40, 0.60]])
 
 
 ########## 2 - Ce qu'on observe #####################
 
-def proba_tempete(observation):
-    "fonction qui calcule la vraie proba de tempete grace aux matrices"
+def proba_tempete(observation, meteo_precedente):
+    "le calcul dépend de la météo de la case d'où l'on vient"
+    p_trans=MATRICE_TRANSITION[meteo_precedente]
     p_obs_sachant_etat=MATRICE_EMISSION[:, observation] # on recupère toute la colonne de la matrice qui correspond a notre observation (0 ou 1)
-    p_obs_totale=np.sum(p_obs_sachant_etat*POSITION_INITIALE) # loi des probabilités totales, on multiplie la colonne par notre vecteur de base POSITION_INITIALE
-    return (p_obs_sachant_etat[1]*POSITION_INITIALE[1])/p_obs_totale  # Théorème de Bayes, proba sachant tempête divisé par proba totale
+    p_obs_totale=np.sum(p_obs_sachant_etat*p_trans) # loi des probabilités totales, on multiplie la colonne par notre vecteur de base POSITION_INITIALE
+    return (p_obs_sachant_etat[1]*p_trans[1])/p_obs_totale  # Théorème de Bayes, proba sachant tempête divisé par proba transition
 
 ######## 3 - Grille ############# 
 
-def generer_case_adjacente():
-    "on choisit au hasard si il y a une tempête et on voit ce que dit le capteur en lisant les matrices"
-    
-    etat_reel=np.random.choice([0, 1], p=POSITION_INITIALE) # l’état réel (0 ou 1) en respectant les probas du vecteur POSITION_INITIALE
+def generer_case_adjacente(meteo_precedente):
+    "on gèrene la météo en fonction de la case précédente grace à la matrice de transition"
+    p_trans=MATRICE_TRANSITION[meteo_precendente]
+    etat_reel=np.random.choice([0, 1], p=p_trans)
     observation=np.random.choice([0, 1], p=MATRICE_EMISSION[etat_reel]) # ce que dit le capteur en regardant la bonne ligne de la matrice d'émission
-    est_tempete=(etat_reel == 1) # transforme le 1 en True pour la suite du code
-    return est_tempete, observation
+    return etat_reel, observation #on retourne 0 ou 1 pour l'état réel
 
 ############# 4 - Les bateaux et leurs profils #########
 
@@ -47,6 +51,8 @@ class Bateau:
         self.y=DEPART[1]
         self.jours_penalite=0 
         self.fini=False
+
+        self.meteo_actuelle=np.random.choice([0,1],p=POSITION_INITIALE) #le bateau mémorise la météo de la case sur laquelle il est
         
         "on crée un historique pour tracer le graphique a la fin"
         self.historique_x=[self.x]
@@ -67,8 +73,10 @@ class Bateau:
         tempete_est, obs_est=generer_case_adjacente()
 
         "le skipper utilise le théorème de bayes pour évaluer le danger"
-        danger_nord=proba_tempete(obs_nord)
-        danger_est=proba_tempete(obs_est)
+        etat_nord, obs_nord=generer_case_adjacente(self.meteo_actuelle)
+        etat_est, obs_est=generer_case_adjacente(self.meteo_actuelle)
+        danger_nord=proba_tempete(obs_nord, self.meteo_actuelle)
+        danger_est=proba_tempete(obs_est, self.meteo_actuelle)
         direction=None
         action_log=""
         
@@ -102,13 +110,15 @@ class Bateau:
         # "le bateau bouge en vrai et découvre la case cachée"
         if direction=="Nord":
             self.y +=1
-            if tempete_nord: 
+            self.meteo_actuelle=etat_nord
+            if etat_nord==1:
                 self.jours_penalite +=5
                 action_log += " - Tempête ! Bateau cassé (+5j)."
                 
         elif direction=="Est":
             self.x +=1
-            if tempete_est: 
+            self.meteo_actuelle=etat_est
+            if etat_est==1: 
                 self.jours_penalite +=5
                 action_log += " - Tempête ! Bateau cassé (+5j)."
                 
